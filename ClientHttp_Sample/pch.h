@@ -12,7 +12,14 @@
 #include <wrl/client.h>
 
 
+
 #include "winrt/base.h"
+namespace winrt::impl
+{
+	template <typename Async>
+	auto wait_for(Async const& async, Windows::Foundation::TimeSpan const& timeout);
+}
+
 #include <winrt/Windows.Foundation.h>
 #include <winrt/Windows.Storage.Streams.h>
 #include <winrt/Windows.Web.Http.Filters.h>
@@ -33,12 +40,19 @@
 
 #include <atomic>
 #include <condition_variable>
-#include <ppltasks.h>
-#include <concurrent_queue.h>
 #include <filesystem>
 #include <inttypes.h>
 
-struct Dcontext {
+// PPL
+#include <ppltasks.h>
+#include <concurrent_queue.h>
+
+
+// ATL
+#include <atlconv.h>
+#include <atltrace.h>
+
+struct http_context {
 	std::vector<std::wstring> urls;
 	std::wstring out;
 	int tries{ 5 };
@@ -49,6 +63,6 @@ struct Dcontext {
 
 using winrt::Windows::Foundation::IAsyncAction;
 
-IAsyncAction Notidownload(const Dcontext& dctx);
+IAsyncAction Notidownload(const http_context& dctx);
 
 #endif //PCH_H

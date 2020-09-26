@@ -10,12 +10,24 @@ using namespace winrt::Windows::Web::Http::Filters;
 using namespace winrt::Windows::Storage;
 using namespace winrt::Windows::Storage::Streams;
 
-
 CHttpClient::CHttpClient()
 {
 }
 
-std::wstring PathFileName(const wchar_t* begin, const wchar_t* end) {
+void CHttpClient::validate_uri(std::wstring uri_string)
+{
+    // TODO validate url
+
+    /*USES_CONVERSION;
+
+    if (!validate_uri(uri_string))
+    {
+        throw uri_exception("provided uri is invalid: " + std::string(W2A(uri_string.c_str())));
+    }*/
+}
+
+std::wstring CHttpClient::pathfilename(const wchar_t* begin, const wchar_t* end) 
+{
     if (begin == end) {
         return std::wstring(L"index.html");
     }
@@ -33,40 +45,50 @@ std::wstring PathFileName(const wchar_t* begin, const wchar_t* end) {
     return filename;
 }
 
+std::wstring CHttpClient::get_outfolder(std::wstring str_outfolder)
+{
+    std::wstring fulldir, filename;
 
-IAsyncAction DownloadFile(const wchar_t* url, const wchar_t* savefile, const Dcontext& dctx) 
+    if (!str_outfolder.empty())
+    {
+        auto p = std::filesystem::path(str_outfolder);
+        auto pdir = std::filesystem::path(str_outfolder).parent_path();
+        if (!std::filesystem::exists(pdir))
+        {
+            std::error_code ec;
+            if (!std::filesystem::create_directories(pdir, ec))
+            {
+                throw std::filesystem::filesystem_error("unable to create the foler, name: ", ec);
+            }
+        }
+        fulldir = pdir.wstring();
+        if (p.has_filename()) {
+            filename = p.filename().wstring();
+        }
+    }
+    else {
+        fulldir = std::filesystem::current_path().wstring();
+    }
+    return fulldir;
+}
+
+
+
+
+IAsyncAction CHttpClient::DownloadFile(const wchar_t* url, const wchar_t* outfolder, const http_context& context)
 {
     try 
     {
-        std::wstring fulldir, filename;
-     
-        if (savefile != nullptr) 
-        {
-            auto p = std::filesystem::path(savefile);
-            auto pdir = std::filesystem::path(savefile).parent_path();
-            if (!std::filesystem::exists(pdir))
-            {
-                std::error_code ec;
-                if (!std::filesystem::create_directories(pdir, ec))
-                {
-                    throw std::filesystem::filesystem_error("create dir failed", ec);
-                }
-            }
-            fulldir = pdir.wstring();
-            if (p.has_filename()) {
-                filename = p.filename().wstring();
-            }
-        }
-        else {
-            fulldir = std::filesystem::current_path().wstring();
-        }
-        printf("download url: %ls %ls\n", url, fulldir.c_str());
+        auto fulldir = get_outfolder(outfolder);
+        std::wstring filename;
+
+        ATLTRACE("download url: %ls %ls\n", url, fulldir.c_str());
 
         HttpBaseProtocolFilter baseFilter;
         baseFilter.AllowAutoRedirect(false);
         baseFilter.AllowUI(true);
 
-        printf("HTTP version: %d\n",baseFilter.MaxVersion()); 
+        ATLTRACE("HTTP version: %d\n",baseFilter.MaxVersion());
 
         HttpClient client(baseFilter);
         client.DefaultRequestHeaders().Append(
@@ -76,21 +98,21 @@ IAsyncAction DownloadFile(const wchar_t* url, const wchar_t* savefile, const Dco
 
         auto resp = co_await client.GetAsync(uri, HttpCompletionOption::ResponseHeadersRead); /// Only read header.
         int times = 0;
-        while ((resp.StatusCode() == HttpStatusCode::Found || resp.StatusCode() == HttpStatusCode::MovedPermanently || resp.StatusCode() == HttpStatusCode::TemporaryRedirect) && (times <= dctx.tries)) 
+        while ((resp.StatusCode() == HttpStatusCode::Found || resp.StatusCode() == HttpStatusCode::MovedPermanently || resp.StatusCode() == HttpStatusCode::TemporaryRedirect) && (times <= context.tries))
         {
             auto location = resp.Headers().Location();
-            printf("Redirect to %ls\n", location.AbsoluteUri().c_str());
+            ATLTRACE("Redirect to %ls\n", location.AbsoluteUri().c_str());
             resp = co_await client.GetAsync(location, HttpCompletionOption::ResponseHeadersRead);
             times++;
         }
         
         if (!resp.IsSuccessStatusCode()) {
-            printf("StatusCode: %d\n", resp.StatusCode());
+            ATLTRACE("StatusCode: %d\n", resp.StatusCode());
             co_return;
         }
 
         if (resp.Version() == HttpVersion::Http20) {
-            printf("HTTP 2.0\n");
+            ATLTRACE("HTTP 2.0\n");
         }
 
         if (filename.empty() && resp.Content().Headers().ContentDisposition()) 
@@ -98,20 +120,20 @@ IAsyncAction DownloadFile(const wchar_t* url, const wchar_t* savefile, const Dco
             if (!resp.Content().Headers().ContentDisposition().FileName().empty()) 
             {
                 filename.assign(resp.Content().Headers().ContentDisposition().FileName().c_str());
-                printf("use filename %ls\n", filename.c_str());
+                ATLTRACE("use filename %ls\n", filename.c_str());
             }
         }
 
-        if (filename.empty()) 
+        if (filename.empty())
         {
-            filename = PathFileName(uri.Path().c_str(), uri.Path().c_str() + uri.Path().size());
-            printf("filename: %ls\n", filename.c_str());
+            filename = pathfilename(uri.Path().c_str(), uri.Path().c_str() + uri.Path().size());
+            ATLTRACE("filename: %ls\n", filename.c_str());
         }
 
         uint64_t blen = 0;
         if (resp.Content().TryComputeLength(blen)) 
         {
-            printf("content len=%" PRId64 "\n", blen);
+            ATLTRACE("content len=%" PRId64 "\n", blen);
         }
         /// If cannot download some dir,
         auto folder = co_await StorageFolder::GetFolderFromPathAsync(fulldir); /// Must fullpath
@@ -122,30 +144,33 @@ IAsyncAction DownloadFile(const wchar_t* url, const wchar_t* savefile, const Dco
         auto task = resp.Content().WriteToStreamAsync(stream);
         task.Progress([](const IAsyncOperationWithProgress<uint64_t, uint64_t>&,const uint64_t& pb) 
         {            
-                wprintf(L"download %llu\n", pb);
+                ATLTRACE(L"download %llu\n", pb);
         });
         auto result = co_await task;
-        wprintf(L"total %llu\n", result);
+        ATLTRACE(L"total %llu\n", result);
     }
     catch (const hresult_error& e) 
     {
-        printf("download error: 0x%08x %ls\n", e.code().value, e.message().c_str());
+        ATLTRACE("download error: 0x%08x %ls\n", e.code().value, e.message().c_str());
     }
     catch (const std::exception& e) 
     {
-        printf("download url: %s\n", e.what());
+        ATLTRACE("download url: %s\n", e.what());
     }  
 }
 
-IAsyncAction Notidownload(const Dcontext& dctx)
+IAsyncAction CHttpClient::Notidownload(const http_context& dctx)
 {
-    try {
+    try
+    {
         co_await DownloadFile(dctx.urls[0].c_str(), dctx.out.c_str(), dctx);
     }
-    catch (const hresult_error& e) {
-        printf("open dir: %ls\n", e.message().c_str());
+    catch (const hresult_error& e)
+    {
+        ATLTRACE("open dir: %ls\n", e.message().c_str());
     }
-    catch (const std::exception& e) {
-        printf("open dir: %s\n", e.what());
+    catch (const std::exception& e)
+    {
+        ATLTRACE("open dir: %s\n", e.what());
     }
 }
