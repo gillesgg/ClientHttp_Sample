@@ -75,26 +75,26 @@ std::wstring http_client::get_outfolder(std::wstring str_outfolder)
 }
 
 
-void http_client::authenticate(HttpResponseMessage resp)
-{
-
-    ATLTRACE("Authenticate Status code=%d", resp.StatusCode());
-
-    if (!resp.IsSuccessStatusCode() && resp.StatusCode() == HttpStatusCode::ProxyAuthenticationRequired)
-    {
-
-    }
-
-    if (!resp.IsSuccessStatusCode() && resp.StatusCode() == HttpStatusCode::Unauthorized)
-    {
-        IVectorView<HttpChallengeHeaderValue> blaa = resp.Headers().WwwAuthenticate().GetView();
-
-        for (auto const& authchalenge : resp.Headers().WwwAuthenticate().GetView())
-        {
-            auto sc = authchalenge.Scheme();
-        }       
-    }
-}
+//void http_client::authenticate(HttpResponseMessage resp)
+//{
+//
+//    ATLTRACE("Authenticate Status code=%d", resp.StatusCode());
+//
+//    if (!resp.IsSuccessStatusCode() && resp.StatusCode() == HttpStatusCode::ProxyAuthenticationRequired)
+//    {
+//
+//    }
+//
+//    if (!resp.IsSuccessStatusCode() && resp.StatusCode() == HttpStatusCode::Unauthorized)
+//    {
+//        IVectorView<HttpChallengeHeaderValue> blaa = resp.Headers().WwwAuthenticate().GetView();
+//
+//        for (auto const& authchalenge : resp.Headers().WwwAuthenticate().GetView())
+//        {
+//            auto sc = authchalenge.Scheme();
+//        }       
+//    }
+//}
 
 IAsyncAction http_client::DownloadFile(const wchar_t* url, const wchar_t* outfolder, const http_context& context)
 {
@@ -131,7 +131,7 @@ IAsyncAction http_client::DownloadFile(const wchar_t* url, const wchar_t* outfol
         
         if (!resp.IsSuccessStatusCode()) 
         {            
-            authenticate(resp);
+            //authenticate(resp);
             co_return;
         }
 

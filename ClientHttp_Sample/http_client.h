@@ -30,7 +30,7 @@ private:
 	static void validate_uri(std::wstring uri_string);
 	static std::wstring pathfilename(const wchar_t* begin, const wchar_t* end);
 	std::wstring get_outfolder(std::wstring str_outfolder);
-	void authenticate(winrt::Windows::Web::Http::HttpResponseMessage resp);
+	//void authenticate(winrt::Windows::Web::Http::HttpResponseMessage resp);
 
 private:
 	winrt::Windows::Web::Http::HttpClient						m_client;
