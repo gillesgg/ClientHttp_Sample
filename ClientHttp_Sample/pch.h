@@ -29,6 +29,7 @@ namespace winrt::impl
 #include <winrt/Windows.Networking.h>
 #include <winrt/Windows.Storage.h>
 #include <winrt/Windows.UI.Popups.h>
+#include <winrt/Windows.Foundation.Collections.h>
 
 #include <wincred.h>
 

@@ -1,20 +1,22 @@
 #include "pch.h"
-#include "CHttpClient.h"
+#include "http_client.h"
 
 
 using namespace winrt;
 using namespace winrt::Windows::Foundation;
 using namespace winrt::Windows::Web;
 using namespace winrt::Windows::Web::Http;
+using namespace winrt::Windows::Web::Http::Headers;
 using namespace winrt::Windows::Web::Http::Filters;
 using namespace winrt::Windows::Storage;
 using namespace winrt::Windows::Storage::Streams;
+using namespace winrt::Windows::Foundation::Collections;
 
-CHttpClient::CHttpClient()
+http_client::http_client() 
 {
 }
 
-void CHttpClient::validate_uri(std::wstring uri_string)
+void http_client::validate_uri(std::wstring uri_string)
 {
     // TODO validate url
 
@@ -26,7 +28,7 @@ void CHttpClient::validate_uri(std::wstring uri_string)
     }*/
 }
 
-std::wstring CHttpClient::pathfilename(const wchar_t* begin, const wchar_t* end) 
+std::wstring http_client::pathfilename(const wchar_t* begin, const wchar_t* end) 
 {
     if (begin == end) {
         return std::wstring(L"index.html");
@@ -45,7 +47,7 @@ std::wstring CHttpClient::pathfilename(const wchar_t* begin, const wchar_t* end)
     return filename;
 }
 
-std::wstring CHttpClient::get_outfolder(std::wstring str_outfolder)
+std::wstring http_client::get_outfolder(std::wstring str_outfolder)
 {
     std::wstring fulldir, filename;
 
@@ -73,9 +75,28 @@ std::wstring CHttpClient::get_outfolder(std::wstring str_outfolder)
 }
 
 
+void http_client::authenticate(HttpResponseMessage resp)
+{
 
+    ATLTRACE("Authenticate Status code=%d", resp.StatusCode());
 
-IAsyncAction CHttpClient::DownloadFile(const wchar_t* url, const wchar_t* outfolder, const http_context& context)
+    if (!resp.IsSuccessStatusCode() && resp.StatusCode() == HttpStatusCode::ProxyAuthenticationRequired)
+    {
+
+    }
+
+    if (!resp.IsSuccessStatusCode() && resp.StatusCode() == HttpStatusCode::Unauthorized)
+    {
+        IVectorView<HttpChallengeHeaderValue> blaa = resp.Headers().WwwAuthenticate().GetView();
+
+        for (auto const& authchalenge : resp.Headers().WwwAuthenticate().GetView())
+        {
+            auto sc = authchalenge.Scheme();
+        }       
+    }
+}
+
+IAsyncAction http_client::DownloadFile(const wchar_t* url, const wchar_t* outfolder, const http_context& context)
 {
     try 
     {
@@ -90,24 +111,27 @@ IAsyncAction CHttpClient::DownloadFile(const wchar_t* url, const wchar_t* outfol
 
         ATLTRACE("HTTP version: %d\n",baseFilter.MaxVersion());
 
-        HttpClient client(baseFilter);
-        client.DefaultRequestHeaders().Append(
+       
+        m_client.DefaultRequestHeaders().Append(
             L"User-Agent", L"IE/5.0 (Windows NT 10.0; Win64; x64)");
         
         Uri uri(url);
 
-        auto resp = co_await client.GetAsync(uri, HttpCompletionOption::ResponseHeadersRead); /// Only read header.
+        m_client.GetAsync(uri, HttpCompletionOption::ResponseHeadersRead);
+
+        auto resp = co_await m_client.GetAsync(uri, HttpCompletionOption::ResponseHeadersRead); /// Only read header.
         int times = 0;
         while ((resp.StatusCode() == HttpStatusCode::Found || resp.StatusCode() == HttpStatusCode::MovedPermanently || resp.StatusCode() == HttpStatusCode::TemporaryRedirect) && (times <= context.tries))
         {
             auto location = resp.Headers().Location();
             ATLTRACE("Redirect to %ls\n", location.AbsoluteUri().c_str());
-            resp = co_await client.GetAsync(location, HttpCompletionOption::ResponseHeadersRead);
+            resp = co_await m_client.GetAsync(location, HttpCompletionOption::ResponseHeadersRead);
             times++;
         }
         
-        if (!resp.IsSuccessStatusCode()) {
-            ATLTRACE("StatusCode: %d\n", resp.StatusCode());
+        if (!resp.IsSuccessStatusCode()) 
+        {            
+            authenticate(resp);
             co_return;
         }
 
@@ -159,7 +183,7 @@ IAsyncAction CHttpClient::DownloadFile(const wchar_t* url, const wchar_t* outfol
     }  
 }
 
-IAsyncAction CHttpClient::Notidownload(const http_context& dctx)
+IAsyncAction http_client::getfile(const http_context& dctx)
 {
     try
     {
